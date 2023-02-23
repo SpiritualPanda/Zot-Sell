@@ -1,27 +1,15 @@
 //Getting required Firebase Libs
 import { initializeApp } from "firebase/app";
 import { getFirestore, waitForPendingWrites } from "firebase/firestore";
-import { doc, setDoc } from "firebase/firestore"; 
-import { collection, addDoc} from "firebase/firestore";
-import { Timestamp } from "firebase/firestore";
-import { getStorage, ref, uploadBytes } from "firebase/storage";
+import { handleListings } from './getlistings.js';
+import { addListing } from './addlistingdb.js';
+import { getListingById } from './getListingById.js';
 
+/* This is setting up the express server. */
 import express from 'express';
 const appE = express()
-const port = process.env.PORT || 3000;
+const port = 3000;
 import cors from 'cors';
-
-appE.use(express.json())
-appE.post('/addlisting', (req, res) => {
-  console.log(req.body);
-  //addListing(req.body);
-  addImg(req.body);
-})
-appE.get('http://localhost:3000/showlistings', (req, res) => {
-  console.log(req.body)
-  console.log(res)
-})
-
 
 appE.use('/public', express.static('public'))
 
@@ -46,56 +34,25 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
 
-
+//main handles post and get requests
 async function main()
 {
-  // Add a new document in collection "cities"
-  await setDoc(doc(db, "cities", "LA"), {
-    name: "Los Angeles",
-    state: "CA",
-    country: "USA"
-  });
-
-    appE.use(cors())
-    appE.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
+  appE.use(express.json({limit: '50mb'}));
+  appE.use(express.urlencoded({limit: '50mb', extended: true}));
+  appE.use(cors())
+  appE.listen(port, () => {
+  console.log(`Example app listening on port ${port}`)
   })
+
+  //This adds data from listing to db
+  appE.post('/addlisting', async (req, res) => {
+    console.log(req.body);
+    var sendInfo = await addListing(db, req.body)
+    res.send(sendInfo);
+  })
+
+  //handles get for listings; function in getlistings.js
+  appE.get('/listings', handleListings(db));
+  appE.get('/showItem', getListingById(db));
 }
 main();
-
-async function addImg(info)
-{
-  console.log(info);
-  //var bytearray = Uint8Array.from(atob(info["picture"]), c => c.charCodeAt(0));
-  var bytearray = Uint8Array.from(atob(info["picture"]), c => c.charCodeAt(0));
-  // Create a root reference
-  const storage = getStorage();
-  var imgName = new Date() + '-' + '.png';
-  // Create a reference to 'mountains.jpg'
-  const picRef = ref(storage, imgName);
-
-  // Create a reference to 'images/mountains.jpg'
-  const ImagesPicRef = ref(storage, 'images/'+imgName);
-
-// While the file names are the same, the references point to different files
-picRef.name === ImagesPicRef.name;           // true
-picRef.fullPath === ImagesPicRef.fullPath;   // false 
-
-  const storageRef = ref(storage, ImagesPicRef);
-
-    // 'file' comes from the Blob or File API
-  await uploadBytes(storageRef, bytearray).then((snapshot) => {
-    console.log('Uploaded a blob or file! with name: ' + imgName);
-  });
-  info["picture"] = imgName;
-  await addListing(info);
-}
-
-async function addListing(info)
-{
-      // Add a new document with a generated id.
-    info["time"] = Timestamp.now();
-    const docRef = await addDoc(collection(db, "listings"), info);
-   console.log("Document written with ID: ", docRef.id);
-}
-
